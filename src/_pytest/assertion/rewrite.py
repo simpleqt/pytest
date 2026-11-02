@@ -745,22 +745,34 @@ class AssertionRewriter(ast.NodeVisitor):
         ]
         mod.body[pos:pos] = imports
 
-        # Collect asserts.
-        nodes: list[ast.AST] = [mod]
+        # Collect asserts. Each node is paired with a flag telling whether it
+        # lives in a class body (directly or nested, without an intervening
+        # function definition), whose execution namespace may give special
+        # meaning to names -- e.g. ``enum.Enum`` rejects repeated keys -- so
+        # the rewriter must not store its temporary variables there (#9582).
+        nodes: list[tuple[ast.AST, bool]] = [(mod, False)]
         while nodes:
-            node = nodes.pop()
+            node, in_class_body = nodes.pop()
             assert isinstance(node, ast.AST)
             for name, field in ast.iter_fields(node):
                 if isinstance(field, list):
                     new: list[ast.AST] = []
                     for i, child in enumerate(field):
                         if isinstance(child, ast.Assert):
-                            # Transform assert.
-                            new.extend(self.visit(child))
+                            if not in_class_body:
+                                # Transform assert.
+                                new.extend(self.visit(child))
+                            else:
+                                new.append(child)
                         else:
                             new.append(child)
                             if isinstance(child, ast.AST):
-                                nodes.append(child)
+                                nodes.append(
+                                    (
+                                        child,
+                                        self.child_in_class_body(child, in_class_body),
+                                    )
+                                )
                     setattr(node, name, new)
                 elif (
                     isinstance(field, ast.AST)
@@ -768,11 +780,25 @@ class AssertionRewriter(ast.NodeVisitor):
                     # asserts.
                     and not isinstance(field, ast.expr)
                 ):
-                    nodes.append(field)
+                    nodes.append((field, in_class_body))
 
     @staticmethod
     def is_rewrite_disabled(docstring: str) -> bool:
         return "PYTEST_DONT_REWRITE" in docstring
+
+    @staticmethod
+    def child_in_class_body(child: ast.AST, in_class_body: bool) -> bool:
+        """Whether ``child`` executes in a class body (directly or nested in
+        one without an intervening function definition).
+
+        Function definitions start a new scope, so their bodies are never
+        class-body scope; class definitions (possibly nested) always are.
+        """
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return False
+        if isinstance(child, ast.ClassDef):
+            return True
+        return in_class_body
 
     def variable(self) -> str:
         """Get a new variable."""

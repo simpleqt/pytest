@@ -1,0 +1,1 @@
+Assert statements directly in class bodies are no longer rewritten, fixing e.g. ``TypeError: ... already defined`` at collection time for ``enum.Enum`` classes with asserts in their body. Asserts in functions and methods (including methods of classes) keep being rewritten as usual.

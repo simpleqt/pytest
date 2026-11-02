@@ -595,6 +595,61 @@ class TestAssertionRewrite:
         result.stdout.fnmatch_lines(["*AssertionError: [[]0, 1, 2,*98, 99[]]*"])
         result.stdout.no_fnmatch_line("*AssertionError: *...*")
 
+    def test_assert_in_class_body_not_rewritten(self, pytester: Pytester) -> None:
+        """
+        Asserts directly in a class body are not rewritten: the class execution
+        namespace may give special meaning to assigned names -- e.g. ``enum.Enum``
+        rejects repeated keys -- so the rewriter's temporary variables break
+        class creation (#9582).
+        """
+        pytester.makepyfile(
+            """
+            from enum import Enum
+
+            class SomeEnum(Enum):
+                FIRST = 100
+                SECOND = FIRST + 100
+
+                assert SECOND == 200
+            """
+        )
+        # The class body asserts successfully, so the module collects fine
+        # (with no tests in it). Before, rewriting broke the class creation
+        # with "TypeError: '@py_assert1' already defined as True".
+        result = pytester.runpytest()
+        assert result.ret == ExitCode.NO_TESTS_COLLECTED
+        result.stdout.no_fnmatch_line("*error during collection*")
+        result.stdout.no_fnmatch_line("*TypeError*")
+
+    def test_failing_assert_in_class_body_is_plain(self, pytester: Pytester) -> None:
+        """A failing assert in a class body fails like with --assert=plain."""
+        pytester.makepyfile(
+            """
+            class Foo:
+                assert "spam" in "egg"
+            """
+        )
+        result = pytester.runpytest()
+        assert result.ret == ExitCode.INTERRUPTED
+        # Bare AssertionError, not the rewritten "AssertionError: assert ...".
+        result.stdout.fnmatch_lines(["E   AssertionError"])
+
+    def test_assert_in_method_of_class_still_rewritten(
+        self, pytester: Pytester
+    ) -> None:
+        """Asserts in methods of classes keep being rewritten (#9582)."""
+        pytester.makepyfile(
+            """
+            class TestStuff:
+                def test_compare(self):
+                    assert [1, 2] == [3, 4]
+            """
+        )
+        result = pytester.runpytest()
+        assert result.ret == 1
+        # The itemized diff is only produced by a rewritten assert.
+        result.stdout.fnmatch_lines(["*At index 0 diff: 1 != 3*"])
+
     def test_boolop(self) -> None:
         def f1() -> None:
             f = g = False
