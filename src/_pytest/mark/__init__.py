@@ -268,9 +268,25 @@ class MarkMatcher:
             return False
 
         for mark in matches:  # pylint: disable=consider-using-any-or-all
-            if all(mark.kwargs.get(k, NOTSET) == v for k, v in kwargs.items()):
+            if all(_matches(mark.kwargs.get(k, NOTSET), v) for k, v in kwargs.items()):
                 return True
         return False
+
+
+def _matches(value: object, expected: str | int | bool | None) -> bool:
+    """Compare a marker kwarg to the value of the marker expression.
+
+    ``==`` alone would let ``mark(x=1)`` satisfy ``mark(x=True)``, because a
+    bool is an int. A number may still match another number, so that marker
+    kwargs holding a float are not ruled out by the int-only expression grammar.
+    """
+    if type(value) is not type(expected):
+        numbers = (int, float)
+        if isinstance(value, bool) or isinstance(expected, bool):
+            return False
+        if not isinstance(value, numbers) or not isinstance(expected, numbers):
+            return False
+    return value == expected
 
 
 def deselect_by_mark(items: list[Item], config: Config) -> None:

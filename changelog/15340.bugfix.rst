@@ -1,0 +1,1 @@
+Matching a marker keyword argument in a marker expression (``-m "marker(arg=value)"``) now compares the value's type as well as its value, so that ``-m "marker(arg=1)"`` no longer also selects tests marked with ``marker(arg=True)`` (and vice versa).

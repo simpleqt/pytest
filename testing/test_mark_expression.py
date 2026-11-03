@@ -287,6 +287,9 @@ def mark_matcher() -> MarkMatcher:
         ("number_mark(a=6,b=2)", False),
         ("number_mark(a   =   1,b= 2,     c = 6)", False),
         ("number_mark(a='1')", False),
+        # a bool is not the number it compares equal to
+        ("number_mark(a=True)", False),
+        ("number_mark(a=False)", False),
     ),
 )
 def test_keyword_expressions_with_numbers(
@@ -307,6 +310,9 @@ def test_keyword_expressions_with_numbers(
         ("builtin_matchers_mark(z=True)", False),
         ("builtin_matchers_mark(z=0)", False),
         ("builtin_matchers_mark(z=1)", False),
+        # 0 and 1 are not the False and True they compare equal to
+        ("builtin_matchers_mark(y=0)", False),
+        ("builtin_matchers_mark(x=1)", False),
     ),
 )
 def test_builtin_matchers_keyword_expressions(
